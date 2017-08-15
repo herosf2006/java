@@ -1,22 +1,14 @@
-/*
- * MMC.c
- *
- * Created: 8/10/2017 12:43:28 PM
- * Author : nguyenhoanganhkhoa
- */ 
-#define F_CPU 8000000UL
-
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/pgmspace.h>
 #include <stdio.h>
 #include "MMC.h"
 
+#define F_CPU 8000000UL
 
 //-----UART--------------------
 void uart_init(unsigned int BAUD)
-{
-	
+{	
 	unsigned long int temp_BAUD;
 	temp_BAUD=(F_CPU)/16;
 	temp_BAUD/=BAUD;
