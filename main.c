@@ -29,30 +29,21 @@ void uart_char_tx(unsigned char chr)
 	UDR=chr;
 }
 
-//---------tao 1 stream ten mystdout thuoc loai FILE,connect voi ham uart_char_tx
-
 static FILE uartstd=FDEV_SETUP_STREAM(uart_char_tx,NULL,_FDEV_SETUP_WRITE);
-//---------------------
 
 unsigned char buff[512],tchr;		//bo dem phat va nhan
-const char hocavr[]="\nK韓h gui quy anh, chi.\n Trong thoi gian toi, khoi uo?ng c鬾g viec cua Mr. Bao qu?nhiu\n.V?vay lop Tieng Anh se tam dung v?cho den khi co thong bao moi.";
+const char hocavr[]="Hello\n	World!\n";
 
 void main(void)
 {
-	// Declare your local variables here
-	uart_init(38400);
-	
-	// khoi dong UART, BAUD =38400
-	DDRC=0xFF;PORTC=0x00;
-		
+	uart_init(38400);	
+	DDRC=0xFF;PORTC=0x00;		
 	int i,j;
 	char Res;
 	Res=mmc_init();             //khoi dong MMC va SPI
 	PORTC++;                //xog buoc 1,khoi dong card thanh cong
 	if(Res!=0)goto Finish;
-	
-	//------------Phan ghi du lieu----------------
-	//Ghi sector 1
+
 	char *teststring="\nWelcome to this site \n";
 	Res=mmc_writeblock(1,teststring);           //ghi vao sector 1
 	PORTC++;
