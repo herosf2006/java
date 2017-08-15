@@ -44,46 +44,7 @@ void main(void)
 	PORTC++;                //xog buoc 1,khoi dong card thanh cong
 	if(Res!=0)goto Finish;
 
-	char *teststring="\nWelcome to this site \n";
-	Res=mmc_writeblock(1,teststring);           //ghi vao sector 1
-	PORTC++;
-	if(Res!=0)goto Finish;
 	
-	// ghi sector 2
-	teststring="Phan noi dung nay dc luu o sector 2 cua card";
-	Res=mmc_writeblock(2,teststring);      //ghi vao sector 2
-	PORTC++;
-	if(Res!=0)goto Finish;
-	
-	//-----ghi sector 3 va 4
-	tchr=pgm_read_byte(&hocavr[0]);
-	for(i=0;tchr>0;i++)
-	{
-		if(i<512)
-		{
-			tchr=pgm_read_byte(&hocavr[i]);
-			buff[i]=tchr;
-		}
-		else break;
-	}
-	Res=mmc_writeblock(3,buff);				//ghi vao sector 3
-	PORTC++;
-	if(Res!=0)goto Finish;
-	
-	for(j=0;tchr>0;j++)
-	{
-		if(j<512)
-		{
-			tchr=pgm_read_byte(&hocavr[i+j]);
-			buff[j]=tchr;
-		}
-		else break;
-	}
-	Res=mmc_writeblock(4,buff);			//ghi vao sector 4
-	PORTC++;					//xog buoc 5, ghi vao sector 4 thanh cong
-	if(Res!=0)goto Finish;
-	
-	//----******Phan doc du lieu ****----------
 	//doc sector 1
 	Res=mmc_readblock(1,buff);		//doc sector 1
 	PORTC++;						//xog buoc 6,doc sector 1 thanh cong
