@@ -1,0 +1,73 @@
+/*
+ * MAIN.c
+ *
+ * Created: 8/8/2017 2:02:37 PM
+ * Author : nguyenhoanganhkhoa
+ */ 
+
+#define F_CPU	8000000UL
+
+#include <avr/io.h>
+#include <stdio.h>
+#include <util/delay.h>
+#include "lcd.h"
+
+// Voltage Reference: AVCC pin
+#define ADC_VREF_TYPE ((0<<REFS1) | (1<<REFS0) | (0<<ADLAR))
+
+
+// Read the AD conversion result
+unsigned int read_adc(unsigned char adc_input)
+{
+	ADMUX=adc_input | ADC_VREF_TYPE;
+	// Delay needed for the stabilization of the ADC input voltage
+	_delay_us(10);
+	// Start the AD conversion
+	ADCSRA|=(1<<ADSC);
+	// Wait for the AD conversion to complete
+	while ((ADCSRA & (1<<ADIF))==0);
+	ADCSRA|=(1<<ADIF);
+	return ADCW;
+}
+
+void main(void)
+{
+	// Declare your local variables here
+	unsigned int ValueADC=0,NhietDo=0;
+	float Tam;
+	char Chuoi[16];
+	
+	// Analog Comparator initialization
+	ACSR=(1<<ACD) | (0<<ACBG) | (0<<ACO) | (0<<ACI) | (0<<ACIE) | (0<<ACIC) | (0<<ACIS1) | (0<<ACIS0);
+
+	// ADC initialization
+	// ADC Clock frequency: 1000.000 kHz
+	// ADC Voltage Reference: AVCC pin
+	ADMUX=ADC_VREF_TYPE;
+	ADCSRA=(1<<ADEN) | (0<<ADSC) | (0<<ADATE) | (0<<ADIF) | (0<<ADIE) | (0<<ADPS2) | (1<<ADPS1) | (1<<ADPS0);
+	SFIOR=(0<<ACME);
+
+	
+	init_LCD(16);
+
+	while (1)
+	{
+		DDRA=0x02;
+		DDRC=0xFF;
+		DDRB=0xFF;
+		// Place your code here
+		ValueADC=read_adc(0);
+		/*sprintf(Chuoi,"ADC=%04d",ValueADC);
+		move_LCD(1,1);
+		print_LCD(Chuoi,8);*/
+		Tam=((float)500*(float)ValueADC)/(float)1023;
+		NhietDo=(int)Tam;
+		
+		sprintf(Chuoi,"NHIET DO:%02d",NhietDo);
+		move_LCD(1,1);
+		print_LCD(Chuoi,11);
+		putChar_LCD(223);
+		putChar_LCD('C');
+		_delay_ms(100);
+	}
+}
