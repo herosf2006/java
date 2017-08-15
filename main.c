@@ -36,66 +36,30 @@ const char hocavr[]="Hello\n	World!\n";
 
 void main(void)
 {
-	uart_init(38400);	
-	DDRC=0xFF;PORTC=0x00;		
-	int i,j;
-	char Res;
-	Res=mmc_init();             //khoi dong MMC va SPI
-	PORTC++;                //xog buoc 1,khoi dong card thanh cong
-	if(Res!=0)goto Finish;
+	uart_init(38400);
+	int 	i,j;
+	char	res;
+	DDRC 	= 0xFF;
+	PORTC 	= 0x00;		
 
- 	char *teststring="\nWelcome to this site \n";
-	Res=mmc_writeblock(1,teststring);           //ghi vao sector 1
+	res 	= mmc_init();
 	PORTC++;
-	if(Res!=0)goto Finish;
-	
-	// ghi sector 2
-	teststring="Phan noi dung nay dc luu o sector 2 cua card";
-	Res=mmc_writeblock(2,teststring);      //ghi vao sector 2
-	PORTC++;
-	if(Res!=0)goto Finish;
-	
-	//-----ghi sector 3 va 4
-	tchr=pgm_read_byte(&hocavr[0]);
-	for(i=0;tchr>0;i++)
-	{
-		if(i<512)
-		{
-			tchr=pgm_read_byte(&hocavr[i]);
-			buff[i]=tchr;
-		}
-		else break;
-	}	
-	
-	//doc sector 1
-	Res=mmc_readblock(1,buff);		//doc sector 1
-	PORTC++;						//xog buoc 6,doc sector 1 thanh cong
-	fprintf(&uartstd,buff);
-	
-	//doc sector 2
-	Res=mmc_readblock(2,buff);
-	PORTC++;
-	fprintf(&uartstd,buff);		//in toan bo chuoi doc ve len Terminal
-	
-	//doc sector 3
-	Res=mmc_readblock(3,buff);
-	PORTC++;
-	fprintf(&uartstd,"\n\n");
-	fprintf(&uartstd,buff);
+	if( res != 0 )
+		goto finish;
 
-	//doc sector 4
-	Res=mmc_readblock(4,buff);
+	char *teststring="Welcome to this site\nUnsigned int read_adc";
+
+	res		= mmc_writeblock(1, teststring);
 	PORTC++;
-	fprintf(&uartstd,buff);	
+	if( res! = 0 )
+		goto Finish;	
 		
-	Finish:
-	      PORTC|=(Res<<4);      // hien thi trang thai MMC ra LED 2
+	finish:
+		PORTC |= ( res << 4 );
 
 	while (1)
 	{
-		// Place your code here
 
 	}
-	return 0;
-	
+	return 0;	
 }
