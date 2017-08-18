@@ -5,3 +5,5 @@
 **A collection of awesome lists for hackers, pentesters & security researchers.**
 
 Your [contributions](contributing.md) are always welcome !
+
+http://derekmolloy.ie/writing-a-linux-kernel-module-part-1-introduction/#prettyPhoto
