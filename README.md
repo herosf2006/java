@@ -1,9 +1,3 @@
-![Awesome Hacking](awesome_hacking.jpg)
+https://gcsjira.cybersoft-vn.com/wiki/display/EMB/Generate+CT+report+for+Storing
 
-# [Awesome Hacking](https://github.com/Hack-with-Github/Awesome-Hacking)
-
-**A collection of awesome lists for hackers, pentesters & security researchers.**
-
-Your [contributions](contributing.md) are always welcome !
-
-http://derekmolloy.ie/writing-a-linux-kernel-module-part-1-introduction/#prettyPhoto
+https://gcsjira.cybersoft-vn.com/wiki/display/EMB/CCTV+Storing+Working+Process+and+Rules#CCTVStoringWorkingProcessandRules-CT-postbugprocedure
