@@ -1,73 +1,660 @@
 /*
- * MAIN.c
+ * COPYRIGHT (C) 2016(2017) MITSUBISHI ELECTRIC CORPORATION ALL RIGHTS RESERVED
  *
- * Created: 8/8/2017 2:02:37 PM
- * Author : nguyenhoanganhkhoa
- */ 
+ * @Author: duyhln
+ * @Date:   2016-03-03 09:59:29
+ * @Last Modified by:   giaumn
+ * @Last Modified time: 2016-06-29 17:24:14
+ */
+(function(context){
+  'use strict';
 
-#define F_CPU	8000000UL
+  /**
+   * The CCTVHTTPClient
+   */
+  var CCTVHTTPClient = function() {
+    /**
+     * @type {Number}  SUCCESS  The value of success status
+     * @type {Number}  FAIL     Tge value of fail status
+     */
+    var REQ_SUCCESS = 0;
+    var REQ_FAIL = 1;
+    var RESEND_WITHIN = 2000;
+    
+    var xhttpAsync = new XMLHttpRequest();
 
-#include <avr/io.h>
-#include <stdio.h>
-#include <util/delay.h>
-#include "lcd.h"
+    this.HTTP_NOTFOUND = 404;
+    this.HTTP_TIMEOUT = 408;
 
-// Voltage Reference: AVCC pin
-#define ADC_VREF_TYPE ((0<<REFS1) | (1<<REFS0) | (0<<ADLAR))
+    /**
+     * The call for postAsync oncompleted event
+     */
+    this.oncompleted = undefined;
 
+    /**
+     * The call for postAsync onprogress event
+     */
+    this.onprogress = undefined;
 
-// Read the AD conversion result
-unsigned int read_adc(unsigned char adc_input)
-{
-	ADMUX=adc_input | ADC_VREF_TYPE;
-	// Delay needed for the stabilization of the ADC input voltage
-	_delay_us(10);
-	// Start the AD conversion
-	ADCSRA|=(1<<ADSC);
-	// Wait for the AD conversion to complete
-	while ((ADCSRA & (1<<ADIF))==0);
-	ADCSRA|=(1<<ADIF);
-	return ADCW;
-}
+    /**
+     * Get data from Recorder
+     * @param  {String}   command        The name of command
+     * @param  {String}   params         The list of params format: a=A&b=B&c=C
+     * @param  {Object}   outputData     The output data of request
+     * @return {Number}                  If get success return 0, else return 1
+     */
+    this.get = function(command, params, outputData) {
+      /**
+       * Validate command value
+       */
+      var error = context.validateParam(command, 'string', 'first', 'CCTVHTTPClient.get');
+      if (error !== '') {
+        throw new Error(error);
+      }
 
-void main(void)
-{
-	// Declare your local variables here
-	unsigned int ValueADC=0,NhietDo=0;
-	float Tam;
-	char Chuoi[16];
-	
-	// Analog Comparator initialization
-	ACSR=(1<<ACD) | (0<<ACBG) | (0<<ACO) | (0<<ACI) | (0<<ACIE) | (0<<ACIC) | (0<<ACIS1) | (0<<ACIS0);
+      if (command.length === 0) {
+        throw new Error('CMD is empty string. Expect a valid CMD');
+      }
 
-	// ADC initialization
-	// ADC Clock frequency: 1000.000 kHz
-	// ADC Voltage Reference: AVCC pin
-	ADMUX=ADC_VREF_TYPE;
-	ADCSRA=(1<<ADEN) | (0<<ADSC) | (0<<ADATE) | (0<<ADIF) | (0<<ADIE) | (0<<ADPS2) | (1<<ADPS1) | (1<<ADPS0);
-	SFIOR=(0<<ACME);
+      /**
+       * Validate params value
+       */
+      error = context.validateParam(params, 'string', 'second', 'CCTVHTTPClient.get');
+      if (error !== '') {
+        throw new Error(error);
+      }
 
-	
-	init_LCD(16);
+      /**
+       * Validate outputData value
+       */
+      error = context.validateParam(outputData, 'object', 'third', 'CCTVHTTPClient.get');
+      if (error !== '') {
+        throw new Error(error);
+      }
 
-	while (1)
-	{
-		DDRA=0x02;
-		DDRC=0xFF;
-		DDRB=0xFF;
-		// Place your code here
-		ValueADC=read_adc(0);
-		/*sprintf(Chuoi,"ADC=%04d",ValueADC);
-		move_LCD(1,1);
-		print_LCD(Chuoi,8);*/
-		Tam=((float)500*(float)ValueADC)/(float)1023;
-		NhietDo=(int)Tam;
-		
-		sprintf(Chuoi,"NHIET DO:%02d",NhietDo);
-		move_LCD(1,1);
-		print_LCD(Chuoi,11);
-		putChar_LCD(223);
-		putChar_LCD('C');
-		_delay_ms(100);
-	}
-}
+      /**
+       * Begin request
+       */
+      var xhttp = new XMLHttpRequest();
+      var urlGet = '';
+
+      if (typeof(params) === 'undefined' || params === '' || params === null) {
+        urlGet = SERVER_URL + '?CMD=' + command;
+      } else {
+        urlGet = SERVER_URL + '?CMD=' + command + '&' + params;
+      }
+
+      // Add method and url to request object.
+      outputData.method = 'GET';
+      outputData.url = urlGet;
+      // GET sync ( set to false )
+      xhttp.open('GET', urlGet, false);
+      //xhttp.setRequestHeader("If-None-Match", "\"doesnt-match-anything\"");
+      //xhttp.timeout = this.getTimeout(command);
+
+      try {
+        CCTVLogger.info('[HTTPCCTVClient][FUNC get][INFO] Url = ' + urlGet);
+
+        // Send request
+        xhttp.send();
+
+        // Request success
+        if (xhttp.readyState === 4 && (xhttp.status === 200 || xhttp.status === 500)) {
+          // Get response text
+          var responseText = xhttp.responseText;
+          // Parse response text into data JSON object
+          var objTmpData;
+          if (command === 'GetCameraSetDataResult' || command === 'GetFileRequest') {
+            var diff = this.getDiffKey(command);
+            objTmpData = CCTVParser.parseSpecialDataToObject(responseText, diff);
+          } else {
+            objTmpData = CCTVParser.parseDataToObject(responseText);
+          }
+
+          // Sync the time of server to logger
+          if (command === 'login') {
+            var serverTime = xhttp.getResponseHeader('Date');
+
+            if (Number(objTmpData.result) === 0) {
+              self.postMessage({
+                actionType: ACTION_TYPE_LOGIN_CHECK_POINT,
+                sessionID: objTmpData.sessionID
+              });
+            }
+
+            // Post a message to sync to GUI thread's logger
+            self.postMessage({
+              actionType: ACTION_TYPE_SYNC_LOGGER_TIME,
+              serverTime: serverTime
+            });
+
+            // Sync main thread's logger
+            CCTVLogger.syncLoggerTime(serverTime);
+
+            CCTVLogger.info('[HTTPCCTVClient][FUNC get: ' + command + '][INFO] Server time = ' + serverTime);
+          }
+
+          // Set a flag to check whether SetSettingPanelStatus is on/off
+          if (command === 'SetSettingPanelStatusRequest') {
+            self.postMessage({
+              actionType: ACTION_TYPE_SETTING_PANEL_CHECK_POINT
+            });
+          }
+
+          // Sync the timezone of server to logger
+          if (command === 'GetSettingRequest') {
+            // Post a message to sync to GUI thread's logger
+            self.postMessage({
+              actionType: ACTION_TYPE_SYNC_LOGGER_TIME_ZONE,
+              timeZone: objTmpData.TimeZone
+            });
+
+            // Sync main thread's logger
+            CCTVLogger.syncLoggerTimeZone(objTmpData.TimeZone);
+
+            CCTVLogger.info('[HTTPCCTVClient][FUNC get][INFO] Server timezone = ' + objTmpData.TimeZone);
+          }
+
+          // Parse data success, assign parsed data into output data
+          for (var key in objTmpData) {
+            outputData[key] = objTmpData[key];
+          }
+
+          outputData.responseHeader = xhttp.getAllResponseHeaders();
+          outputData.ready = xhttp.readyState
+          outputData.httpCode = xhttp.status;
+          outputData.responseText = xhttp.responseText;
+          return REQ_SUCCESS;
+        }
+
+        outputData.httpCode = xhttp.status;
+        // Request failed
+        CCTVLogger.info('[HTTPCCTVClient][FUNC get][INFO] Url = ' + urlGet +
+          '. ReadyState = ' + xhttp.readyState + 
+          '. Http code = ' + xhttp.status
+        );
+      } catch (err) {
+        if (err.name.indexOf('NetworkError') >= 0) {
+          outputData.httpCode = this.HTTP_NOTFOUND;
+        } else if (err.name.indexOf('TimeoutError') >= 0) {
+          outputData.httpCode = this.HTTP_TIMEOUT;
+        } else {
+          outputData.httpCode = xhttp.status;
+        }
+
+        CCTVLogger.error('[HTTPCCTVClient][FUNC get][ERROR] Url = ' + urlGet +
+          '. Failed to send request. Message: ' + err + 
+          ' Http code: ' + outputData.httpCode
+        );
+      }
+
+      outputData.responseHeader = xhttp.getAllResponseHeaders();
+      outputData.ready = xhttp.readyState
+      outputData.responseText = xhttp.responseText;
+      return REQ_FAIL;
+    };
+
+    /**
+     * Post data to Recorder
+     * @param  {String}   command        Name of command
+     * @param  {String}   postData       List of params. Format 1: a=A&b=B&c=C. Format 2: { key : value }
+     * @param  {Object}   outputData     Object is used to store data after post
+     * @return {Number}                  If post success return 0, else return 1
+     */
+    this.post = function(command, postData, outputData) {
+      /**
+       * Validate command value
+       */
+      var error = context.validateParam(command, 'string', 'first', 'CCTVHTTPClient.post');
+      if (error !== '') {
+        throw new Error(error);
+      }
+
+      if (command.length === 0) {
+        throw new Error('CMD is empty string. Expect a valid CMD');
+      }
+
+      /**
+       * Validate postData value
+       */
+      var error1 = context.validateParam(postData, 'string', 'second', 'CCTVHTTPClient.post');
+      var error2 = context.validateParam(postData, 'object', 'second', 'CCTVHTTPClient.post');
+      if (error1 !== '' && error2 !== '') {
+        error = error1 + ' or Object';
+        throw new Error(error);
+      }
+
+      /**
+       * Validate outputData value
+       */
+      error = context.validateParam(outputData, 'object', 'third', 'CCTVHTTPClient.post');
+      if (error !== '') {
+        throw new Error(error);
+      }
+
+      /**
+       * Begin request
+       */
+      var xhttp = new XMLHttpRequest();
+      var urlPost = SERVER_URL;
+
+      // Process post body
+      var postBody;
+
+      outputData.method = 'POST';
+      outputData.url = urlPost;
+      if (typeof(postData) === 'string') {
+        /**
+         * Construct post body as a raw string
+         */
+        if (postData.length === 0) {
+          postBody = 'CMD=' + command;
+        } else {
+          postBody = 'CMD=' + command + '&' + postData;
+        }
+        outputData.postData = postBody;
+      } else if (typeof(postData) === 'object') {
+        // Construct post data as a blob to send binary data (file, ...)
+        var blobs = [];
+        var andBlob = new Blob(['&']);
+        var objValue;
+        var objKey;
+        var objKeys = Object.keys(postData);
+
+        // Create blob for CMD= portion
+        blobs.push(new Blob(['CMD', '=', command, andBlob]));
+
+        for (var iKey = 0; iKey < objKeys.length; iKey++) {
+          // Get the key
+          objKey = objKeys[iKey];
+
+          if (postData.hasOwnProperty(objKey)) {
+
+            // Get the value
+            objValue = postData[objKey];
+
+            // Create a blob with the value and push into an array
+            blobs.push(new Blob([objKey, '=', objValue]));
+
+            // Do not add the last '&' to request body
+            if (iKey === objKeys.length - 1) {
+              continue;
+            }
+
+            blobs.push(andBlob);
+          }
+        }
+
+        /**
+         * Using constructed array of blobs to build one single blob and send it to server
+         */
+        postBody = new Blob(blobs);
+      } else {
+        // Throw error if call with an invalid parameters
+        throw new Error('CCTVHTTPClient post method\'s \'postData\' parameter is either a string or array');
+      }
+
+      /**
+       * Resend request if it is aborted with in RESEND_WITHIN ms
+       */
+      var beginTime = Date.now();
+      var endTime = beginTime;
+      while (endTime - beginTime < RESEND_WITHIN) {
+        xhttp.open('POST', urlPost, false);
+        // Set request timeout
+        // xhttp.timeout = this.getTimeout(command);
+
+        // Set request headers
+        xhttp.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+
+        try {
+          CCTVLogger.info('[HTTPCCTVClient][FUNC post][ENTER] Url = ' + urlPost + '. Post data: ' + postBody);
+
+          // Send request
+          xhttp.send(postBody);
+
+          // Request success
+          if (xhttp.readyState === 4 && (xhttp.status === 200 || xhttp.status === 500)) {
+
+            // Update time server after change time
+            if(command === 'UpdateTimeRequest') {
+              var serverTime = xhttp.getResponseHeader('Date');
+              // Post a message to sync to GUI thread's logger
+              self.postMessage({
+                actionType: ACTION_TYPE_SYNC_LOGGER_TIME,
+                serverTime: serverTime
+              });
+
+              // Sync main thread's logger
+              CCTVLogger.syncLoggerTime(serverTime);
+            }
+
+            var responseText = xhttp.responseText;
+            var objTmpData = CCTVParser.parseDataToObject(responseText);
+
+            outputData.responseKey = '';
+            outputData.responseValue = '';
+            // Parse success, assign to output data
+            for (var key in objTmpData) {
+              outputData[key] = objTmpData[key];
+              outputData.responseKey += key;
+              outputData.responseValue += objTmpData[key];
+            }
+            outputData.responseHeader = xhttp.getAllResponseHeaders();
+            outputData.ready = xhttp.readyState
+            outputData.httpCode = xhttp.status;
+            return REQ_SUCCESS;
+          }
+
+          outputData.httpCode = xhttp.status;
+          CCTVLogger.info('[HTTPCCTVClient][FUNC post][INFO] Url = ' + urlPost +
+            '. ReadyState = ' + xhttp.readyState + 
+            '. Http code = ' + xhttp.status
+          );
+
+          break;
+        } catch (err) {
+          if (err.name.indexOf('NetworkError') >= 0) {
+            outputData.httpCode = this.HTTP_NOTFOUND;
+          } else if (err.name.indexOf('TimeoutError') >= 0) {
+            outputData.httpCode = this.HTTP_TIMEOUT;
+          } else {
+            outputData.httpCode = xhttp.status;
+          }
+
+          CCTVLogger.error('[HTTPCCTVClient][FUNC post][ERROR] Url = ' + urlPost +
+            '. Failed to send request. Message: ' + err + 
+            ' Http code: ' + outputData.httpCode + 
+            '. Start time: ' + beginTime + 
+            '. Current time: ' + Date.now()
+          );
+        }
+
+        // Record the current timestamp to check whether to continue to resend request or not
+        endTime = Date.now();
+      }
+
+      return REQ_FAIL;
+    };
+
+    /**
+     * Post data to Recorder
+     * @param  {String}     command        Name of command
+     * @param  {String}     postData       List of params. Format 1: a=A&b=B&c=C. Format 2: { key : value }
+     * @param  {Function}   oncompleted    The callback function when request is finished
+     * @param  {Function}   onprogress     The callback function when request progress is changed
+     */
+    this.postAsync = function(command, postData, oncompleted, onprogress) {
+      /**
+       * Validate parameter's value
+       */
+      var error = context.validateParam(command, 'string', 'first', 'CCTVHTTPClient.postAsync');
+      if (error !== '') {
+        throw new Error(error);
+      }
+
+      if (command.length === 0) {
+        throw new Error('CMD is empty string. Expect a valid CMD');
+      }
+
+      var error1 = context.validateParam(postData, 'string', 'second', 'CCTVHTTPClient.postAsync');
+      var error2 = context.validateParam(postData, 'object', 'second', 'CCTVHTTPClient.postAsync');
+      if (error1 !== '' && error2 !== '') {
+        error = error1 + ' or Object';
+        throw new Error(error);
+      }
+
+      error = context.validateParam(oncompleted, 'function', 'third', 'CCTVHTTPClient.postAsync');
+      if (error !== '') {
+        throw new Error(error);
+      }
+
+      error = context.validateParam(onprogress, 'function', 'fourth', 'CCTVHTTPClient.postAsync');
+      if (error !== '') {
+        throw new Error(error);
+      }
+
+      /**
+       * Begin request
+       */
+      var httpClient = this;
+      var urlPost = SERVER_URL;
+
+      // Process post body
+      var postBody;
+
+      if (typeof(postData) === 'string') {
+        /**
+         * Construct post body as a raw string
+         */
+        if (postData.length === 0) {
+          postBody = 'CMD=' + command;
+        } else {
+          postBody = 'CMD=' + command + '&' + postData;
+        }
+      } else if (typeof(postData) === 'object') {
+        // Construct post data as a blob to send binary data (file, ...)
+        var blobs = [];
+        var andBlob = new Blob(['&']);
+        var objValue;
+        var objKey;
+        var objKeys = Object.keys(postData);
+
+        // Create blob for CMD= portion
+        blobs.push(new Blob(['CMD', '=', command, andBlob]));
+
+        for (var iKey = 0; iKey < objKeys.length; iKey++) {
+          // Get the key
+          objKey = objKeys[iKey];
+
+          if (postData.hasOwnProperty(objKey)) {
+
+            // Get the value
+            objValue = postData[objKey];
+
+            // Create a blob with the value and push into an array
+            blobs.push(new Blob([objKey, '=', objValue]));
+
+            // Do not add the last '&' to request body
+            if (iKey === objKeys.length - 1) {
+              continue;
+            }
+
+            blobs.push(andBlob);
+          }
+        }
+
+        /**
+         * Using constructed array of blobs to build one single blob and send it to server
+         */
+        postBody = new Blob(blobs);
+      } else {
+        // Throw error if call with an invalid parameters
+        throw new Error('CCTVHTTPClient post method\'s \'postData\' parameter is either a string or array');
+      }
+
+      // Set callback for onprogress
+      if (typeof(window) === 'undefined') {
+        var messsageArg = {
+          actionType: ACTION_TYPE_POST_ASYNC,
+          cmd: command,
+          postData: postData 
+        };
+
+        this.oncompleted = oncompleted;
+        this.onprogress = onprogress;
+
+        context.postMessage(messsageArg);
+        return;
+      }
+
+      xhttpAsync.upload.onprogress = function(e) {
+        if (e.loaded === e.total) {
+          return;
+        }
+
+        var eventData = {
+          cancelable: e.cancelable,
+          lengthComputable: e.lengthComputable,
+          loaded: e.loaded,
+          total: e.total
+        };
+        onprogress(eventData);
+      };
+
+      // Set timeout event callback
+      xhttpAsync.ontimeout = function(e) {
+        // Callback fail
+        oncompleted(false, {
+          httpCode: httpClient.HTTP_TIMEOUT
+        });
+      };
+
+      // Set callback for completed
+      xhttpAsync.onreadystatechange = function() {
+        var result;
+        // Request success
+        if (xhttpAsync.readyState === 4) {
+
+          var resultData = {};
+          if (xhttpAsync.status === 200 || xhttpAsync.status === 500) {
+            var responseText = xhttpAsync.responseText;
+            var objTmpData = CCTVParser.parseDataToObject(responseText);
+
+            // Callback success
+            oncompleted(true, objTmpData);
+            result = true;
+          } else {
+            // Callback fail
+            resultData.httpCode = xhttpAsync.status;
+            oncompleted(false, resultData);
+            result = false;
+          }
+
+          CCTVLogger.info('[HTTPCCTVClient][FUNC post][INFO] Url = ' + urlPost + '. ' + 
+            'ReadyState = ' + xhttpAsync.readyState + '. ' +
+            'Http code = ' + xhttpAsync.status + '. ' + 
+            'Request completed with result: ' + result
+          );
+        }
+      };
+
+      xhttpAsync.open('POST', urlPost, true);
+
+      // Set request timeout
+      xhttpAsync.timeout = this.getTimeout(command);
+
+      // Set request headers
+      xhttpAsync.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+      CCTVLogger.info('[HTTPCCTVClient][FUNC post][ENTER] Url = ' + urlPost + '. Post data: ' + postBody);
+
+      try {
+        // Send request
+        xhttpAsync.send(postBody);
+
+        // Return XMLHttpRequest for chainning call
+        return xhttpAsync;
+      } catch (err) {
+        var resultData = {};
+        if (err.name.indexOf('NetworkError') >= 0) {
+          resultData.httpCode = this.HTTP_NOTFOUND;
+        } else if (err.name.indexOf('TimeoutError') >= 0) {
+          resultData.httpCode = this.HTTP_TIMEOUT;
+        } else {
+          resultData.httpCode = xhttpAsync.status;
+        }
+
+        // Callback fail
+        oncompleted(false, resultData);
+
+        CCTVLogger.error('[HTTPCCTVClient][FUNC post][ERROR] Url = ' + urlPost +
+          '. Failed to send request. Message: ' + err + 
+          ' Http code: ' + resultData.httpCode
+        );
+
+        // Do not allow chainning call in case of request failed to sent
+        return undefined;
+      }
+    };
+
+    /**
+     * Abort post async request
+     */
+    this.abortPostAsync = function() {
+      if (typeof(window) === 'undefined') {
+        var messsageArg = {
+          actionType: ACTION_TYPE_POST_ASYNC_ABORT
+        };
+
+        context.postMessage(messsageArg);
+      } else {
+        xhttpAsync.abort();
+      }
+    };
+
+    /**
+     * Get TimeOut of command
+     * @param  {String} HTTPcommand  The name of command
+     * @return {Number}              The timeout of command
+     */
+    this.getTimeout = function(HTTPcommand) {
+      var cmdTimeout = 0;
+
+      if (HTTPcommand === 'GetSettingRequest') {
+        cmdTimeout = 180000;
+      } else if (HTTPcommand === 'GetCameraSetData') {
+        cmdTimeout = 120000;
+      } else if (HTTPcommand === 'UpdateAllCameraSettingRequest') {
+        //2017-01-24 lamvn #10605
+        cmdTimeout = 185000;
+      } else if (HTTPcommand === 'UpdateSettingRequest') {
+        cmdTimeout = 125000;
+      } else if (HTTPcommand === 'SendVersionUpFileList') {
+        //2017-03-20 lamvn #10767
+        cmdTimeout = 15625000;  
+      } else if (HTTPcommand === 'CamSettingResetRequest') {
+        cmdTimeout = 155000;
+      } else if (HTTPcommand === 'SendImportFileList') {
+        //2017-03-07 lamvn #10711
+        cmdTimeout = 24500000;
+      } else if (HTTPcommand === 'ClearSettingRequest') {
+        //2017-11-27 kgn. CCTVLREC-84. Add timeout to Clear setting request on Management Setting.
+        cmdTimeout = 125000;
+      } else if (HTTPcommand === DEV_STOP_RECORD_OPERATE_CMD) {
+        //2017-11-27 kgn. CCTVLREC-74. Add timeout to stop recording on device.
+        cmdTimeout = 125000;
+      } else if (HTTPcommand === DEV_START_RECORD_OPERATE_CMD) {
+        //2017-11-27 kgn. CCTVLREC-74. Add timeout to start recording on device.
+        cmdTimeout = 125000;
+      } else if (HTTPcommand === DEV_RESTART_RECORD_OPERATE_CMD) {
+        //2017-11-27 kgn. CCTVLREC-74. Add timeout to restart recording on device.
+        cmdTimeout = 20000;
+      } else {
+        cmdTimeout = 20000;
+      }
+
+      CCTVLogger.debug('[HTTPCCTVClient][FUNC getTimeout][INFO] Cmd: ' + HTTPcommand + '. Timeout: ' + cmdTimeout);
+
+      return cmdTimeout;
+    };
+
+    /**
+     * Get the key that is used to parse data into formatted JSON
+     * @param  {String} command The name of command
+     * @return {String}         The key to parse data
+     */
+    this.getDiffKey = function(command) {
+      if (command === 'GetCameraSetDataResult') {
+        return 'camID';
+      } else if (command === 'GetFileRequest') {
+        return '[Lang';
+      }
+    };
+  };
+
+  /**
+   * CCTVHTTPClient singleton instance
+   * @type {CCTVHTTPClient}
+   */
+  context.CCTVHTTPClient = new CCTVHTTPClient();
+})(self);
