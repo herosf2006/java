@@ -24,3 +24,9 @@ run :
 
 clean:
 	rm *.h *.so *.o *.class
+
+
+1. http://ethdocs.org/en/latest/introduction/index.html
+2. https://solidity.readthedocs.io/en/develop/
+3. https://www.edx.org/course/blockchain-business-introduction-linuxfoundationx-lfs171x
+4. https://hyperledger-fabric.readthedocs.io/en/release/
