@@ -1,7 +1,3 @@
-https://gcsjira.cybersoft-vn.com/wiki/display/EMB/Generate+CT+report+for+Storing
-
-https://gcsjira.cybersoft-vn.com/wiki/display/EMB/CCTV+Storing+Working+Process+and+Rules#CCTVStoringWorkingProcessandRules-CT-postbugprocedure
-
 http://derekmolloy.ie/writing-a-linux-kernel-module-part-1-introduction/#prettyPhoto
 
 TouchArcade (some IOS games reviewed by them are available for Android too)
@@ -79,21 +75,14 @@ Know some multimedia, graphics engines.
 | Section  | Checklist |
 | ------------- | ------------- |
 | C  | const, inline vs macro  |
-|    | ------------- |
 |    | Pointer operation , function pointer  |
-|    | ------------- |
 |    | Memory allocation with malloc/calloc/realloc  |
-|    | ------------- |
 |    | Memset, memcpy  |
-|    | ------------- |
 |    | extern, static (local / global), union vs struct  |
-|    | ------------- |
 |    | macro ( concepts, write a macro, macro issue when expansion like a\*b)  |
-|    | ------------- |
 |    | data alignment, sizeof( a struct)  |
-|    | ------------- |
 |    | String format / operations  |
-|    | ------------- |
+
 
 
 
